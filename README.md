@@ -1,4 +1,4 @@
-````markdown
+
 # RoboSyncPS
 
 RoboSyncPS is a PowerShell script that uses `robocopy` to synchronize files from a source directory to multiple destination directories. It supports exclusions and logs the operations.
@@ -13,6 +13,7 @@ RoboSyncPS is a PowerShell script that uses `robocopy` to synchronize files from
 
 The script uses a `config.json` file for configuration. Below is an example of the configuration file:
 
+
 ```json
 {
   "SourceDir": "C:\\YourSourceDirectory\\",
@@ -23,7 +24,7 @@ The script uses a `config.json` file for configuration. Below is an example of t
   "Exclusions": ["temp", "$RECYCLE.BIN", "System Volume Information"]
 }
 ```
-````
+
 
 - **SourceDir**: The source directory to copy files from.
 - **DestDirs**: An array of destination directories to copy files to.
