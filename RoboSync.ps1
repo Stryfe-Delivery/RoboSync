@@ -1,5 +1,5 @@
 # Get the directory where the script is running
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$scriptDir = Split-Path (Convert-Path -LiteralPath ([Environment]::GetCommandLineArgs()[0]))
 
 # Load configuration from a JSON file in the script's directory
 $configPath = Join-Path $scriptDir "config.json"
@@ -10,7 +10,7 @@ if (-Not (Test-Path $configPath)) {
 
 $config = Get-Content $configPath | ConvertFrom-Json
 
-# Validate configuration
+# Validate configuration - make sure notes section is not considered
 if (-Not $config.SourceDir -or -Not $config.DestDirs -or -Not $config.Exclusions) {
     Write-Error "Invalid configuration file. Please ensure it contains 'SourceDir', 'DestDirs', and 'Exclusions'."
     exit 1
@@ -65,6 +65,9 @@ function Start-Robocopy {
             $stopTime = Get-Date
             $duration = $stopTime - $startTime
             Add-Content -Path $runLogPath -Value "[$stopTime] - Robocopy operation completed for destination '$DestDir'. Duration: $duration."
+
+            # Send notification
+            New-BurntToastNotification -Text "RoboCopy Task Completed", "Robocopy completed successfully for $DestDir"
         }
 
         # Log completion
