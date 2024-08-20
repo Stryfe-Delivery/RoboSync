@@ -10,7 +10,7 @@ if (-Not (Test-Path $configPath)) {
 
 $config = Get-Content $configPath | ConvertFrom-Json
 
-# Validate configuration - make sure notes section is not considered
+# Validate configuration 
 if (-Not $config.SourceDir -or -Not $config.DestDirs -or -Not $config.Exclusions) {
     Write-Error "Invalid configuration file. Please ensure it contains 'SourceDir', 'DestDirs', and 'Exclusions'."
     exit 1
