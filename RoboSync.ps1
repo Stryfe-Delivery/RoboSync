@@ -16,6 +16,18 @@ if (-Not $config.SourceDir -or -Not $config.DestDirs -or -Not $config.Exclusions
     exit 1
 }
 
+# Validate paths exist
+if (-Not (Test-Path $config.SourceDir)) {
+    Write-Error "Source directory does not exist: $($config.SourceDir)"
+    exit 1
+}
+
+foreach ($dir in $config.DestDirs) {
+    if (-Not (Test-Path $dir)) {
+        Write-Warning "Destination directory does not exist and will be created: $dir"
+    }
+}
+
 # Define paths for the log files
 $errorLogPath = Join-Path $scriptDir "error.log"
 $runLogPath = Join-Path $scriptDir "run.log"
@@ -25,6 +37,7 @@ $testLogPath = Join-Path $scriptDir "test.log"
 function Test-Robocopy {
     param (
         [Parameter(Mandatory=$true)]
+        [ValidateScript({Test-Path $_})]
         [string]$SourceDir,
         
         [Parameter(Mandatory=$true)]
@@ -42,25 +55,36 @@ function Test-Robocopy {
         Add-Content -Path $testLogPath -Value "`n[$startTime] - Robocopy TEST operation started (list-only mode)."
 
         foreach ($DestDir in $DestDirs) {
-            # Build the robocopy command with exclusions and /L (list-only) parameter
-            $exclusionParams = ""
-            if ($Exclusions) {
-                foreach ($exclusion in $Exclusions) {
-                    $exclusionParams += " /XD $exclusion"
-                }
+            # Build the robocopy arguments array
+            $arguments = @(
+                "`"$SourceDir`"",
+                "`"$DestDir`""
+            )
+            
+            # Add options
+            $arguments += $Options.Split(" ") | Where-Object { $_ }
+            
+            # Add test mode
+            $arguments += "/L"
+            
+            # Add exclusions
+            foreach ($exclusion in $Exclusions) {
+                $arguments += "/XD"
+                $arguments += "`"$exclusion`""
             }
 
-            $cmd = "robocopy $SourceDir $DestDir $Options /L $exclusionParams"
+            $cmd = "robocopy $arguments"
             Add-Content -Path $testLogPath -Value "`nTEST COMMAND: $cmd"
             
-            # Run the test and capture output
-            $output = & cmd.exe /c $cmd 2>&1
-            Add-Content -Path $testLogPath -Value $output
-
-            # Check for serious errors (not just informational messages)
-            if ($output -match "ERROR") {
-                Add-Content -Path $errorLogPath -Value "`n[$(Get-Date)] - TEST MODE ERRORS for destination '$DestDir':"
-                Add-Content -Path $errorLogPath -Value ($output -match "ERROR")
+            # Run robocopy and capture exit code
+            $process = Start-Process -FilePath "robocopy.exe" -ArgumentList $arguments -Wait -PassThru -NoNewWindow
+            
+            # Log output
+            Add-Content -Path $testLogPath -Value "Exit Code: $($process.ExitCode)"
+            
+            # Check for serious errors (exit code >= 8 indicates failure)
+            if ($process.ExitCode -ge 8) {
+                Add-Content -Path $errorLogPath -Value "`n[$(Get-Date)] - TEST MODE ERRORS for destination '$DestDir': Exit code $($process.ExitCode)"
                 return $false
             }
         }
@@ -80,6 +104,7 @@ function Test-Robocopy {
 function Start-Robocopy {
     param (
         [Parameter(Mandatory=$true)]
+        [ValidateScript({Test-Path $_})]
         [string]$SourceDir,
         
         [Parameter(Mandatory=$true)]
@@ -97,27 +122,45 @@ function Start-Robocopy {
         Add-Content -Path $runLogPath -Value "`n[$startTime] - Robocopy operation started."
 
         foreach ($DestDir in $DestDirs) {
-            $exclusionParams = ""
-            if ($Exclusions) {
-                foreach ($exclusion in $Exclusions) {
-                    $exclusionParams += " /XD $exclusion"
-                }
+            # Build the robocopy arguments array
+            $arguments = @(
+                "`"$SourceDir`"",
+                "`"$DestDir`""
+            )
+            
+            # Add options
+            $arguments += $Options.Split(" ") | Where-Object { $_ }
+            
+            # Add exclusions
+            foreach ($exclusion in $Exclusions) {
+                $arguments += "/XD"
+                $arguments += "`"$exclusion`""
             }
 
-            $cmd = "robocopy $SourceDir $DestDir $Options $exclusionParams"
-            $output = & cmd.exe /c $cmd 2>&1 | Where-Object { $_ -match "ERROR" }
-
-            if ($output) {
-                Add-Content -Path $errorLogPath -Value "`n[$startTime] - Errors encountered:"
-                Add-Content -Path $errorLogPath -Value $output
+            $cmd = "robocopy $arguments"
+            Add-Content -Path $runLogPath -Value "COMMAND: $cmd"
+            
+            # Run robocopy and capture exit code
+            $process = Start-Process -FilePath "robocopy.exe" -ArgumentList $arguments -Wait -PassThru -NoNewWindow
+            
+            # Check exit code
+            if ($process.ExitCode -ge 8) {
+                Add-Content -Path $errorLogPath -Value "`n[$(Get-Date)] - Errors encountered for destination '$DestDir': Exit code $($process.ExitCode)"
+                Write-Error "Robocopy failed for $DestDir with exit code $($process.ExitCode)"
             } else {
-                Write-Host "Robocopy completed successfully for $DestDir"
+                Write-Host "Robocopy completed successfully for $DestDir (Exit code: $($process.ExitCode))"
+                Add-Content -Path $runLogPath -Value "Robocopy completed for destination '$DestDir' with exit code $($process.ExitCode)"
             }
 
             $stopTime = Get-Date
             $duration = $stopTime - $startTime
             Add-Content -Path $runLogPath -Value "[$stopTime] - Robocopy operation completed for destination '$DestDir'. Duration: $duration."
-            New-BurntToastNotification -Text "RoboCopy Task Completed", "Robocopy completed successfully for $DestDir"
+            
+            # Send notification if BurntToast is available
+            if (Get-Module -ListAvailable -Name BurntToast) {
+                Import-Module BurntToast
+                New-BurntToastNotification -Text "RoboCopy Task Completed", "Robocopy completed for $DestDir with exit code $($process.ExitCode)"
+            }
         }
 
         Add-Content -Path $runLogPath -Value "Robocopy operation completed."
@@ -131,7 +174,7 @@ function Start-Robocopy {
 # Main execution flow
 
 # First run in test mode
-$testOptions = "/MIR /Z /R:5 /W:10 /MT:32"  # Same options but will add /L
+$testOptions = "/MIR /Z /R:5 /W:10 /MT:32"
 $testPassed = Test-Robocopy -SourceDir $config.SourceDir -DestDirs $config.DestDirs -Options $testOptions -Exclusions $config.Exclusions
 
 if ($testPassed) {
@@ -141,6 +184,11 @@ if ($testPassed) {
 } else {
     Write-Host "Test mode encountered errors. Check $testLogPath and $errorLogPath for details."
     Write-Error "Robocopy test failed. Aborting actual copy operation."
-    New-BurntToastNotification -Text "RoboCopy Test Failed", "Robocopy test mode encountered errors. Check logs."
+    
+    # Send notification if BurntToast is available
+    if (Get-Module -ListAvailable -Name BurntToast) {
+        Import-Module BurntToast
+        New-BurntToastNotification -Text "RoboCopy Test Failed", "Robocopy test mode encountered errors. Check logs."
+    }
     exit 1
 }
