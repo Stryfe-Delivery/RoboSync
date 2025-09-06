@@ -1,7 +1,7 @@
 
 # RoboSyncPS
 
-RoboSyncPS is a PowerShell script that uses `robocopy` to synchronize files from a source directory to multiple destination directories. It supports exclusions and logs the operations.
+RoboSyncPS is a PowerShell script that uses `robocopy` to synchronize files from a source directory to multiple destination directories. It supports exclusions and logs the operations. The intended use is automated headless operation. 
 
 ## Prerequisites
 
