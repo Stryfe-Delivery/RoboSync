@@ -5,15 +5,20 @@
         "3": "DestDirs: List the directories where the files will be copied. You can add multiple destinations.",
         "4": "Exclusions: List directories or files to exclude from the backup."
     },
-    "SourceDir": "C:\\YourSourceDirectory\\",
+{
+    "SourceDir": "C:\\YourSource",
     "DestDirs": [
-        "D:\\YourFirstBackupDirectory\\",
-        "E:\\YourSecondBackupDirectory\\"
+        "D:\\Backup1",
+        "E:\\Backup2",
+        "F:\\Backup3"
     ],
     "Exclusions": [
         "temp",
         "logs",
-        "System Volume Information"
+        ".tmp"
     ],
+    "Options": "/MIR /Z /R:5 /W:10 /MT:32",
+    "MaxParallelJobs": 2
+},
     "notes_removal": "You can remove the 'notes' section and this line after you have customized your configuration."
 }
